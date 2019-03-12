@@ -105,13 +105,15 @@ var QueueConsumer = function (solaceModule, queueName) {
         } catch (error) {
             consumer.log(error.toString());
         }
+        consumer.log(JSON.stringify(consumer.session.getSessionProperties()));
         // define session event listeners
         consumer.session.on(solace.SessionEventCode.UP_NOTICE, function (sessionEvent) {
             consumer.log('=== Successfully connected and ready to start the message consumer. ===');
             if (consumer.reconnectTimer) {
                 clearTimeout(consumer.reconnectTimer);
                 consumer.reconnectTimer = null;
-            } else {
+            } 
+            if (!consumer.messageConsumer) {
                 consumer.startConsume();
             }
         });
@@ -157,6 +159,7 @@ var QueueConsumer = function (solaceModule, queueName) {
                         queueDescriptor: { name: consumer.queueName, type: solace.QueueType.QUEUE },
                         acknowledgeMode: solace.MessageConsumerAcknowledgeMode.CLIENT, // Enabling Client ack
                     });
+                    consumer.log(JSON.stringify(consumer.messageConsumer.getProperties()));
                     // Define message consumer event listeners
                     consumer.messageConsumer.on(solace.MessageConsumerEventName.UP, function () {
                         consumer.consuming = true;
