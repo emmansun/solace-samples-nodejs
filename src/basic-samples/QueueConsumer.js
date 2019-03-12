@@ -59,7 +59,8 @@ var QueueConsumer = function (solaceModule, queueName) {
         if (argv.length < (2 + 3)) { // expecting 3 real arguments
             consumer.log('Cannot connect: expecting all arguments' +
                 ' <protocol://host[:port]> <client-username>@<message-vpn> <client-password> [reconnectRetries].\n' +
-                'Available protocols are ws://, wss://, http://, https://, tcp://, tcps://');
+                'Available protocols are ws://, wss://, http://, https://, tcp://, tcps://\n' +
+                'For reconnectRetries, default is 20, if you hope to reconnect forever, please specific it as -1.');
             process.exit();
         }
         let hosturl = argv.slice(2)[0];
@@ -70,7 +71,7 @@ var QueueConsumer = function (solaceModule, queueName) {
         let vpn = usernamevpn.split('@')[1];
         consumer.log('Solace message router VPN name: ' + vpn);
         let pass = argv.slice(4)[0];
-        let reconnectRetries = 10;
+        let reconnectRetries = 20;
 
         if (argv.length > 5) {
             try {
