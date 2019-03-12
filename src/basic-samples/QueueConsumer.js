@@ -58,18 +58,30 @@ var QueueConsumer = function (solaceModule, queueName) {
         // extract params
         if (argv.length < (2 + 3)) { // expecting 3 real arguments
             consumer.log('Cannot connect: expecting all arguments' +
-                ' <protocol://host[:port]> <client-username>@<message-vpn> <client-password>.\n' +
+                ' <protocol://host[:port]> <client-username>@<message-vpn> <client-password> [reconnectRetries].\n' +
                 'Available protocols are ws://, wss://, http://, https://, tcp://, tcps://');
             process.exit();
         }
-        var hosturl = argv.slice(2)[0];
+        let hosturl = argv.slice(2)[0];
         consumer.log('Connecting to Solace message router using url: ' + hosturl);
-        var usernamevpn = argv.slice(3)[0];
-        var username = usernamevpn.split('@')[0];
+        let usernamevpn = argv.slice(3)[0];
+        let username = usernamevpn.split('@')[0];
         consumer.log('Client username: ' + username);
-        var vpn = usernamevpn.split('@')[1];
+        let vpn = usernamevpn.split('@')[1];
         consumer.log('Solace message router VPN name: ' + vpn);
-        var pass = argv.slice(4)[0];
+        let pass = argv.slice(4)[0];
+        let reconnectRetries = 10;
+
+        if (argv.length > 5) {
+            try {
+                let val = JSON.parse(argv.slice(5)[0]);
+                if (typeof val === 'number') {
+                    reconnectRetries = val;
+                }
+            } catch (e) {
+            }
+        }
+        consumer.log(`reconnectRetries=${reconnectRetries}`);
         // create session
         try {
             consumer.session = solace.SolclientFactory.createSession({
@@ -78,6 +90,7 @@ var QueueConsumer = function (solaceModule, queueName) {
                 vpnName:  vpn,
                 userName: username,
                 password: pass,
+                reconnectRetries: reconnectRetries
             });
         } catch (error) {
             consumer.log(error.toString());
@@ -85,12 +98,35 @@ var QueueConsumer = function (solaceModule, queueName) {
         // define session event listeners
         consumer.session.on(solace.SessionEventCode.UP_NOTICE, function (sessionEvent) {
             consumer.log('=== Successfully connected and ready to start the message consumer. ===');
-            consumer.startConsume();
+            if (consumer.reconnectTimer) {
+                clearTimeout(consumer.reconnectTimer);
+                consumer.reconnectTimer = null;
+            } else {
+                consumer.startConsume();
+            }
         });
         consumer.session.on(solace.SessionEventCode.CONNECT_FAILED_ERROR, function (sessionEvent) {
             consumer.log('Connection failed to the message router: ' + sessionEvent.infoStr +
                 ' - check correct parameter values and connectivity!');
+            consumer.reconnectTimer = setTimeout(function () {
+                try {
+                    consumer.session.connect();
+                } catch (error) {
+                    consumer.log(error);
+                }
+            }, 10000);
         });
+        consumer.session.on(solace.SessionEventCode.DOWN_ERROR, function (sessionEvent) {
+            consumer.log('Session is down. Reconnect after 10 seconds......');
+            consumer.consuming = false;
+            consumer.reconnectTimer = setTimeout(function () {
+                try {
+                    consumer.session.connect();
+                } catch (error) {
+                    consumer.log(error);
+                }
+            }, 10000);
+        });        
         consumer.session.on(solace.SessionEventCode.DISCONNECTED, function (sessionEvent) {
             consumer.log('Disconnected.');
             consumer.consuming = false;
@@ -142,7 +178,8 @@ var QueueConsumer = function (solaceModule, queueName) {
                     });
                     // Define message received event listener
                     consumer.messageConsumer.on(solace.MessageConsumerEventName.MESSAGE, function (message) {
-                        consumer.log('Received message: "' + message.getBinaryAttachment() + '",' +
+                        const xml = message.getXmlContentDecoded();
+                        consumer.log('Received message: "' + (xml ? xml : message.getBinaryAttachment()) + '",' +
                             ' details:\n' + message.dump());
                         // Need to explicitly ack otherwise it will not be deleted from the message router
                         message.acknowledge();
@@ -161,6 +198,9 @@ var QueueConsumer = function (solaceModule, queueName) {
     consumer.exit = function () {
         consumer.stopConsume();
         consumer.disconnect();
+        if (consumer.reconnectTimer) {
+            clearTimeout(consumer.reconnectTimer);
+        }
         setTimeout(function () {
             process.exit();
         }, 1000); // wait for 1 second to finish
