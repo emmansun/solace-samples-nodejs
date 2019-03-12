@@ -49,6 +49,15 @@ var QueueConsumer = function (solaceModule, queueName) {
         consumer.connect(argv);
     };
 
+    consumer._connect = () => {
+        try {
+            consumer.log('=== Connecting...... ===');    
+            consumer.session.connect();
+        } catch (error) {
+            consumer.log(error.toString());
+        }
+    };
+
     // Establishes connection to Solace message router
     consumer.connect = function (argv) {
         if (consumer.session !== null) {
@@ -109,23 +118,16 @@ var QueueConsumer = function (solaceModule, queueName) {
         consumer.session.on(solace.SessionEventCode.CONNECT_FAILED_ERROR, function (sessionEvent) {
             consumer.log('Connection failed to the message router: ' + sessionEvent.infoStr +
                 ' - check correct parameter values and connectivity!');
+                        
             consumer.reconnectTimer = setTimeout(function () {
-                try {
-                    consumer.session.connect();
-                } catch (error) {
-                    consumer.log(error);
-                }
+                consumer._connect();
             }, 10000);
         });
         consumer.session.on(solace.SessionEventCode.DOWN_ERROR, function (sessionEvent) {
             consumer.log('Session is down. Reconnect after 10 seconds......');
             consumer.consuming = false;
             consumer.reconnectTimer = setTimeout(function () {
-                try {
-                    consumer.session.connect();
-                } catch (error) {
-                    consumer.log(error);
-                }
+                consumer._connect();
             }, 10000);
         });        
         consumer.session.on(solace.SessionEventCode.DISCONNECTED, function (sessionEvent) {
@@ -137,11 +139,7 @@ var QueueConsumer = function (solaceModule, queueName) {
             }
         });
         // connect the session
-        try {
-            consumer.session.connect();
-        } catch (error) {
-            consumer.log(error.toString());
-        }
+        consumer._connect();
     };
 
     // Starts consuming from a queue on Solace message router
