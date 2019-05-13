@@ -180,6 +180,7 @@ var QueueConsumer = function (solaceModule, queueName) {
                         // the message consumer on the queue. Once we receive this error, we can restart consumer by call
                         // consumer.startConsumer()
                         consumer.log('=== An error happened, the message consumer is down ===');
+                        consumer.startConsumer();
                     });
                     // Define message received event listener
                     consumer.messageConsumer.on(solace.MessageConsumerEventName.MESSAGE, function (message) {
