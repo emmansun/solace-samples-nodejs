@@ -176,6 +176,9 @@ var QueueConsumer = function (solaceModule, queueName) {
                     });
                     consumer.messageConsumer.on(solace.MessageConsumerEventName.DOWN_ERROR, function () {
                         consumer.consuming = false;
+                        // TODO: if admin user update queue config in solace admin console, solace server will close
+                        // the message consumer on the queue. Once we receive this error, we can restart consumer by call
+                        // consumer.startConsumer()
                         consumer.log('=== An error happened, the message consumer is down ===');
                     });
                     // Define message received event listener
